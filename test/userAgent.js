@@ -2,6 +2,7 @@
 
 // core requires
 var child_process = require('child_process');
+var http = require('http');
 
 // external requires
 var assert = require('chai').assert;
@@ -19,6 +20,7 @@ var SERVER_ENDPOINT;
 var TEST_ENDPOINT;
 var TEST_RESPONSE_DATA = 'foobar';
 var TEST_RESPONSE_DATA_LENGTH = TEST_RESPONSE_DATA.length;
+var TEST_PATH = '/test/userAgent';
 
 describe('userAgent pre-route handler', function () {
 
@@ -45,7 +47,7 @@ describe('userAgent pre-route handler', function () {
         SERVER.listen(0, SERVER_ADDRESS, function () {
             SERVER_PORT = SERVER.address().port;
             SERVER_ENDPOINT = SERVER_ADDRESS + ':' + SERVER_PORT;
-            TEST_ENDPOINT = SERVER_ENDPOINT + '/test/userAgent';
+            TEST_ENDPOINT = SERVER_ENDPOINT + TEST_PATH;
             done();
         });
     });
@@ -92,46 +94,34 @@ describe('userAgent pre-route handler', function () {
     // header by 'close'.
     it('sets proper headers for HEAD requests from non-curl clients',
         function (done) {
-            var WGET_CMD =
-                ['wget', '-S', TEST_ENDPOINT, '--method=HEAD'].join(' ');
+            var req = http.request({
+                hostname: SERVER_ADDRESS,
+                port: SERVER_PORT,
+                path: TEST_PATH,
+                method: 'HEAD',
+                headers: {
+                    'user-agent': 'foobar',
+                    connection: 'keep-alive'
+                }
+            }, function onResponse(res) {
+                var responseHeaders = res.headers;
 
-            var wget = child_process.exec(WGET_CMD,
-                function onExec(err, stdout, stderr) {
-                    // eslint-disable-next-line no-console
-                    console.log('err:', err);
-                    // eslint-disable-next-line no-console
-                    console.log('stdout:', stdout);
-                    // eslint-disable-next-line no-console
-                    console.log('stderr:', stderr);
+                assert.ok(responseHeaders.hasOwnProperty('content-length'));
+                assert.equal(responseHeaders.connection, 'keep-alive');
 
-                    assert.ifError(err);
-                    var lines = stderr.split(/\n/);
+                // destroy the socket explicitly now since the request was
+                // explicitly requesting to not destroy the socket by setting
+                // its connection header to 'keep-alive'.
+                req.abort();
 
-                    var contentLengthHeaderPresent =
-                        lines.some(function checkContentLengthPresent(line) {
-                            return /Content-Length:.*/.test(line) === true;
-                        });
-
-                    var connectionHeaderIsKeepalive =
-                        lines.some(function checkConnectionHeader(line) {
-                            return /Connection: keep-alive/.test(line);
-                        });
-
-                    assert.ok(contentLengthHeaderPresent);
-                    assert.ok(connectionHeaderIsKeepalive);
-
-                    done();
-                });
-
-            wget.on('error', function onError(err) {
-                // eslint-disable-next-line no-console
-                console.log('error:', err);
+                done();
             });
 
-            wget.on('exit', function onExit(code, signal) {
-                // eslint-disable-next-line no-console
-                console.log('exited with code: %s and signal: %s',
-                    code, signal);
+            req.on('error', function onReqError(err) {
+                assert.ifError(err);
+                done();
             });
+
+            req.end();
         });
 });
