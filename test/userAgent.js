@@ -93,27 +93,45 @@ describe('userAgent pre-route handler', function () {
     it('sets proper headers for HEAD requests from non-curl clients',
         function (done) {
             var WGET_CMD =
-                ['wget', '-qS', TEST_ENDPOINT, '--method=HEAD'].join(' ');
+                ['wget', '-S', TEST_ENDPOINT, '--method=HEAD'].join(' ');
 
-            child_process.exec(WGET_CMD, function onExec(err, stdout, stderr) {
-                assert.ifError(err);
+            var wget = child_process.exec(WGET_CMD,
+                function onExec(err, stdout, stderr) {
+                    // eslint-disable-next-line no-console
+                    console.log('err:', err);
+                    // eslint-disable-next-line no-console
+                    console.log('stdout:', stdout);
+                    // eslint-disable-next-line no-console
+                    console.log('stderr:', stderr);
 
-                var lines = stderr.split(/\n/);
+                    assert.ifError(err);
+                    var lines = stderr.split(/\n/);
 
-                var contentLengthHeaderPresent =
-                    lines.some(function checkContentLengthPresent(line) {
-                        return /Content-Length:.*/.test(line) === true;
-                    });
+                    var contentLengthHeaderPresent =
+                        lines.some(function checkContentLengthPresent(line) {
+                            return /Content-Length:.*/.test(line) === true;
+                        });
 
-                var connectionHeaderIsKeepalive =
-                    lines.some(function checkConnectionHeader(line) {
-                        return /Connection: keep-alive/.test(line);
-                    });
+                    var connectionHeaderIsKeepalive =
+                        lines.some(function checkConnectionHeader(line) {
+                            return /Connection: keep-alive/.test(line);
+                        });
 
-                assert.ok(contentLengthHeaderPresent);
-                assert.ok(connectionHeaderIsKeepalive);
+                    assert.ok(contentLengthHeaderPresent);
+                    assert.ok(connectionHeaderIsKeepalive);
 
-                done();
+                    done();
+                });
+
+            wget.on('error', function onError(err) {
+                // eslint-disable-next-line no-console
+                console.log('error:', err);
+            });
+
+            wget.on('exit', function onExit(code, signal) {
+                // eslint-disable-next-line no-console
+                console.log('exited with code: %s and signal: %s',
+                    code, signal);
             });
         });
 });
